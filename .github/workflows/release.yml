@@ -108,8 +108,8 @@ jobs:
           # Copy necessary files for a ready-to-use plugin
           cp -r src "release/${PACKAGE_NAME}/"
           cp -r migrations "release/${PACKAGE_NAME}/"
-          cp -r templates "release/${PACKAGE_NAME}/"
-          cp -r assets "release/${PACKAGE_NAME}/"
+          [ -d templates ] && cp -r templates "release/${PACKAGE_NAME}/" || true
+          [ -d assets ] && cp -r assets "release/${PACKAGE_NAME}/" || true
           cp Cargo.toml "release/${PACKAGE_NAME}/"
           cp plugin.toml "release/${PACKAGE_NAME}/"
 
