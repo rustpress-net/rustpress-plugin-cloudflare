@@ -1,0 +1,212 @@
+name: Release Plugin
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Only run if commit message starts with [RELEASE]
+    if: startsWith(github.event.head_commit.message, '[RELEASE]')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get current version
+        id: current_version
+        run: |
+          CURRENT_VERSION=$(grep -m1 'version = "' plugin.toml | sed 's/.*version = "\([^"]*\)".*/\1/')
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Parse version bump type from commit message
+        id: bump_type
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+
+          # Check for version bump type in commit body (after newline)
+          if echo "$COMMIT_MSG" | grep -qi "MAJOR"; then
+            BUMP_TYPE="major"
+          elif echo "$COMMIT_MSG" | grep -qi "MINOR"; then
+            BUMP_TYPE="minor"
+          elif echo "$COMMIT_MSG" | grep -qi "PATCH"; then
+            BUMP_TYPE="patch"
+          else
+            # Default to patch if not specified
+            BUMP_TYPE="patch"
+          fi
+
+          echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+          echo "Bump type: $BUMP_TYPE"
+
+      - name: Calculate new version
+        id: new_version
+        run: |
+          CURRENT="${{ steps.current_version.outputs.version }}"
+          BUMP_TYPE="${{ steps.bump_type.outputs.bump_type }}"
+
+          # Parse semantic version
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          case $BUMP_TYPE in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Update version in plugin.toml
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+          sed -i "s/^version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" plugin.toml
+
+      - name: Update version in Cargo.toml
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+          sed -i "0,/^version = \"[^\"]*\"/s//version = \"$NEW_VERSION\"/" Cargo.toml
+
+      - name: Build admin UI
+        working-directory: admin-ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Create release package
+        run: |
+          VERSION="${{ steps.new_version.outputs.version }}"
+          PACKAGE_NAME="rustcloudflare-v${VERSION}"
+
+          # Create release directory
+          mkdir -p "release/${PACKAGE_NAME}"
+
+          # Copy necessary files for a ready-to-use plugin
+          cp -r src "release/${PACKAGE_NAME}/"
+          cp -r migrations "release/${PACKAGE_NAME}/"
+          cp -r templates "release/${PACKAGE_NAME}/"
+          cp -r assets "release/${PACKAGE_NAME}/"
+          cp Cargo.toml "release/${PACKAGE_NAME}/"
+          cp plugin.toml "release/${PACKAGE_NAME}/"
+
+          # Copy built admin UI (dist folder)
+          mkdir -p "release/${PACKAGE_NAME}/admin-ui"
+          cp -r admin-ui/dist "release/${PACKAGE_NAME}/admin-ui/"
+          cp admin-ui/package.json "release/${PACKAGE_NAME}/admin-ui/"
+
+          # Create README for the release
+          cat > "release/${PACKAGE_NAME}/README.md" << 'EOF'
+          # RustCloudflare Plugin
+
+          Seamless Cloudflare integration for RustPress - CDN, DNS, Security, Workers, R2, KV, D1, and more.
+
+          ## Installation
+
+          1. Extract this archive to your RustPress plugins directory:
+             ```
+             /path/to/rustpress/plugins/rustcloudflare/
+             ```
+
+          2. Activate the plugin in RustPress admin panel
+
+          3. Configure your Cloudflare API credentials in the plugin settings
+
+          ## Requirements
+
+          - RustPress 1.0.0 or higher
+          - Cloudflare account with API token
+
+          ## Documentation
+
+          Visit https://rustpress.io/plugins/rustcloudflare for full documentation.
+          EOF
+
+          # Create zip file
+          cd release
+          zip -r "../${PACKAGE_NAME}.zip" "${PACKAGE_NAME}"
+          cd ..
+
+          echo "package_name=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "zip_file=${PACKAGE_NAME}.zip" >> $GITHUB_OUTPUT
+        id: package
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add plugin.toml Cargo.toml
+          git commit -m "chore: bump version to ${{ steps.new_version.outputs.version }}"
+          git push
+
+      - name: Create Git tag
+        run: |
+          VERSION="${{ steps.new_version.outputs.version }}"
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"
+
+      - name: Extract release notes from commit
+        id: release_notes
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+
+          # Extract everything after the first line as release notes
+          NOTES=$(echo "$COMMIT_MSG" | tail -n +2 | sed '/^$/d' | grep -v -E '^(MAJOR|MINOR|PATCH)$' || echo "")
+
+          if [ -z "$NOTES" ]; then
+            NOTES="Release version ${{ steps.new_version.outputs.version }}"
+          fi
+
+          # Handle multiline output
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.new_version.outputs.version }}
+          name: RustCloudflare v${{ steps.new_version.outputs.version }}
+          body: |
+            ## RustCloudflare v${{ steps.new_version.outputs.version }}
+
+            ${{ steps.release_notes.outputs.notes }}
+
+            ### Installation
+
+            1. Download `${{ steps.package.outputs.zip_file }}` below
+            2. Extract to your RustPress plugins directory
+            3. Activate the plugin in the admin panel
+
+            ### Changelog
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          files: |
+            ${{ steps.package.outputs.zip_file }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
