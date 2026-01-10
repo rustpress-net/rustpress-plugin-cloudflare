@@ -1,7 +1,6 @@
 //! Configuration management for RustCloudflare
 
 use crate::error::{CloudflareError, CloudflareResult};
-use rustpress_core::AppContext;
 use serde::{Deserialize, Serialize};
 
 /// Main configuration for Cloudflare integration
@@ -210,23 +209,22 @@ fn default_polish() -> PolishMode {
 }
 
 impl CloudflareConfig {
-    /// Create configuration from AppContext (reads from plugin settings)
-    pub async fn from_context(ctx: &AppContext) -> CloudflareResult<Self> {
-        let settings = ctx.plugin_settings("rustcloudflare").await?;
-
-        let api_token = settings
+    /// Create configuration from JSON settings value
+    pub fn from_settings(settings: serde_json::Value) -> CloudflareResult<Self> {
+        // Validate required fields exist
+        let _api_token = settings
             .get("api_token")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .ok_or_else(|| CloudflareError::MissingConfig("api_token".to_string()))?;
 
-        let account_id = settings
+        let _account_id = settings
             .get("account_id")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .ok_or_else(|| CloudflareError::MissingConfig("account_id".to_string()))?;
 
-        let zone_id = settings
+        let _zone_id = settings
             .get("zone_id")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
@@ -237,6 +235,12 @@ impl CloudflareConfig {
             .map_err(|e| CloudflareError::InvalidConfig(e.to_string()))?;
 
         Ok(config)
+    }
+
+    /// Check if configuration is available (either from env or database)
+    pub fn is_configured() -> bool {
+        std::env::var("CLOUDFLARE_API_TOKEN").is_ok()
+            || std::env::var("CLOUDFLARE_ACCOUNT_ID").is_ok()
     }
 
     /// Create configuration from environment variables

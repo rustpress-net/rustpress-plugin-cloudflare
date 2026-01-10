@@ -75,7 +75,7 @@ impl DnsService {
 
     /// Sync DNS record to local database
     async fn sync_to_local(&self, record: &DnsRecord) -> CloudflareResult<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO cloudflare_dns_records (
                 cloudflare_id, record_type, name, content, proxied, ttl, priority, synced_at
@@ -89,14 +89,14 @@ impl DnsService {
                 priority = EXCLUDED.priority,
                 synced_at = NOW()
             "#,
-            record.id,
-            record.record_type,
-            record.name,
-            record.content,
-            record.proxied,
-            record.ttl,
-            record.priority
         )
+        .bind(&record.id)
+        .bind(&record.record_type)
+        .bind(&record.name)
+        .bind(&record.content)
+        .bind(record.proxied)
+        .bind(record.ttl)
+        .bind(record.priority)
         .execute(&self.db)
         .await
         .map_err(|e| CloudflareError::DatabaseError(e.to_string()))?;
@@ -106,13 +106,11 @@ impl DnsService {
 
     /// Delete DNS record from local database
     async fn delete_from_local(&self, id: &str) -> CloudflareResult<()> {
-        sqlx::query!(
-            "DELETE FROM cloudflare_dns_records WHERE cloudflare_id = $1",
-            id
-        )
-        .execute(&self.db)
-        .await
-        .map_err(|e| CloudflareError::DatabaseError(e.to_string()))?;
+        sqlx::query("DELETE FROM cloudflare_dns_records WHERE cloudflare_id = $1")
+            .bind(id)
+            .execute(&self.db)
+            .await
+            .map_err(|e| CloudflareError::DatabaseError(e.to_string()))?;
 
         Ok(())
     }

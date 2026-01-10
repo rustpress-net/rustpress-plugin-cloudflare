@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use crate::error::{CloudflareError, CloudflareResult};
+use crate::error::CloudflareResult;
 use crate::services::{CloudflareServices, TokenResources};
 use tracing::{info, error};
 

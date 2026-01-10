@@ -9,6 +9,7 @@ use chrono::{Duration, Utc};
 
 pub struct AnalyticsService {
     client: Option<Arc<CloudflareClient>>,
+    #[allow(dead_code)]
     db: PgPool,
 }
 

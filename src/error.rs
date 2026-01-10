@@ -83,6 +83,12 @@ pub enum CloudflareError {
     #[error("Cache error: {0}")]
     CacheError(String),
 
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
+
+    #[error("Plugin not configured - Cloudflare credentials required")]
+    NotConfigured,
+
     #[error("Internal error: {0}")]
     Internal(String),
 
@@ -99,6 +105,12 @@ pub enum CloudflareError {
     Anyhow(#[from] anyhow::Error),
 }
 
+impl From<CloudflareError> for rustpress_core::Error {
+    fn from(err: CloudflareError) -> Self {
+        rustpress_core::Error::internal(err.to_string())
+    }
+}
+
 impl CloudflareError {
     /// Get HTTP status code for this error
     pub fn status_code(&self) -> StatusCode {
@@ -106,9 +118,10 @@ impl CloudflareError {
             Self::AuthenticationError(_) | Self::InvalidToken => StatusCode::UNAUTHORIZED,
             Self::PermissionDenied(_) => StatusCode::FORBIDDEN,
             Self::NotFound(_) | Self::ZoneNotFound(_) => StatusCode::NOT_FOUND,
-            Self::ValidationError(_) | Self::InvalidConfig(_) | Self::MissingConfig(_) => {
+            Self::ValidationError(_) | Self::InvalidConfig(_) | Self::MissingConfig(_) | Self::ConfigError(_) => {
                 StatusCode::BAD_REQUEST
             }
+            Self::NotConfigured => StatusCode::SERVICE_UNAVAILABLE,
             Self::RateLimitExceeded => StatusCode::TOO_MANY_REQUESTS,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::ServiceUnavailable(_) | Self::Timeout(_) => StatusCode::SERVICE_UNAVAILABLE,
@@ -154,6 +167,8 @@ impl CloudflareError {
             Self::SslError(_) => "SSL_ERROR",
             Self::WafError(_) => "WAF_ERROR",
             Self::CacheError(_) => "CACHE_ERROR",
+            Self::ConfigError(_) => "CONFIG_ERROR",
+            Self::NotConfigured => "NOT_CONFIGURED",
             Self::Internal(_) => "INTERNAL_ERROR",
             Self::Reqwest(_) => "HTTP_CLIENT_ERROR",
             Self::SerdeJson(_) => "SERIALIZATION_ERROR",

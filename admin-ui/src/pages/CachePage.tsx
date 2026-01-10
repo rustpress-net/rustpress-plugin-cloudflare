@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Database, Trash2, RefreshCw, Tag, Link } from 'lucide-react';
+import { Database, Trash2, RefreshCw, Tag, Link, Archive }
+ from 'lucide-react';
 import { cloudflareApi } from '../lib/api';
 import toast from 'react-hot-toast';
 
@@ -56,7 +57,7 @@ export function CachePage() {
   return (
     <div className="p-6">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-neutral-100">Cache Management</h1>
+        <h1 className="text-2xl font-bold text-neutral-100 flex items-center gap-3"><Archive className="w-7 h-7 text-orange-400" />Cache Management</h1>
         <p className="text-neutral-400">Manage Cloudflare CDN cache</p>
       </div>
 

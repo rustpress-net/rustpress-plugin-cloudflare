@@ -5,7 +5,7 @@ use crate::error::{CloudflareError, CloudflareResult};
 use crate::models::PurgeResponse;
 use sqlx::PgPool;
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::info;
 
 /// Cache management service
 pub struct CacheService {
@@ -88,14 +88,14 @@ impl CacheService {
         event_type: &str,
         details: Option<serde_json::Value>,
     ) -> CloudflareResult<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO cloudflare_cache_events (event_type, details, created_at)
             VALUES ($1, $2, NOW())
             "#,
-            event_type,
-            details
         )
+        .bind(event_type)
+        .bind(details)
         .execute(&self.db)
         .await
         .map_err(|e| CloudflareError::DatabaseError(e.to_string()))?;

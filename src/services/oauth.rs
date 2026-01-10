@@ -4,7 +4,7 @@ use crate::error::{CloudflareError, CloudflareResult};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tracing::{debug, info, error};
+use tracing::{info, error};
 
 /// Cloudflare OAuth configuration
 #[derive(Debug, Clone)]

@@ -25,13 +25,11 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // Proxy is disabled in dev mode to allow mock API to work
-    // Enable when backend is running:
-    // proxy: {
-    //   '/api': {
-    //     target: 'http://localhost:3080',
-    //     changeOrigin: true,
-    //   },
-    // },
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:3080',
+        changeOrigin: true,
+      },
+    },
   },
 });

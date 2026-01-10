@@ -118,7 +118,7 @@ export function WorkersPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-100">Edge Computing</h1>
+          <h1 className="text-2xl font-bold text-neutral-100 flex items-center gap-3"><Code className="w-7 h-7 text-orange-400" />Edge Computing</h1>
           <p className="text-neutral-400">Manage Workers, Routes, and KV Storage</p>
         </div>
       </div>

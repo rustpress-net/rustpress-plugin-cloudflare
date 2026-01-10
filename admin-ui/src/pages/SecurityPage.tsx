@@ -93,7 +93,7 @@ export function SecurityPage() {
     <div className="p-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-neutral-100">Security & WAF</h1>
+        <h1 className="text-2xl font-bold text-neutral-100 flex items-center gap-3"><Shield className="w-7 h-7 text-orange-400" />Security & WAF</h1>
         <p className="text-neutral-400">Manage security settings and firewall rules</p>
       </div>
 

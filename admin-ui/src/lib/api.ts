@@ -183,4 +183,86 @@ export const cloudflareApi = {
   getPluginSettings: () => api.get('/cloudflare/settings'),
   updatePluginSettings: (settings: any) => api.put('/cloudflare/settings', settings),
   resetPluginSettings: () => api.post('/cloudflare/settings/reset'),
+
+  // Auto-Purge Settings
+  getAutoPurgeSettings: () => api.get('/cloudflare/settings/auto-purge'),
+  updateAutoPurgeSettings: (settings: {
+    auto_purge_enabled?: boolean;
+    auto_purge_on_post_update?: boolean;
+    auto_purge_on_page_update?: boolean;
+    auto_purge_on_media_upload?: boolean;
+    auto_purge_on_theme_change?: boolean;
+    auto_purge_on_menu_update?: boolean;
+    auto_purge_entire_site?: boolean;
+    auto_purge_homepage?: boolean;
+    auto_purge_archives?: boolean;
+    auto_purge_custom_urls?: string;
+    auto_purge_delay_ms?: number;
+  }) => api.put('/cloudflare/settings/auto-purge', settings),
+
+  // Cache Warming Settings
+  updateCacheWarmingSettings: (settings: {
+    cache_warming_enabled?: boolean;
+    cache_warming_schedule?: string;
+  }) => api.put('/cloudflare/settings/cache-warming', settings),
+
+  // Notification Settings
+  updateNotificationSettings: (settings: {
+    security_email_alerts?: boolean;
+    security_slack_webhook?: string;
+  }) => api.put('/cloudflare/settings/notifications', settings),
+
+  // Advanced Settings
+  updateAdvancedSettings: (settings: {
+    development_mode_duration?: number;
+    analytics_retention_days?: number;
+    r2_default_bucket?: string;
+    workers_enabled?: boolean;
+  }) => api.put('/cloudflare/settings/advanced', settings),
+
+  // D1 Databases
+  listD1Databases: () => api.get('/cloudflare/d1/databases'),
+  getD1Database: (id: string) => api.get(`/cloudflare/d1/databases/${id}`),
+  createD1Database: (name: string) => api.post('/cloudflare/d1/databases', { name }),
+  deleteD1Database: (id: string) => api.delete(`/cloudflare/d1/databases/${id}`),
+  executeD1Query: (databaseId: string, sql: string) =>
+    api.post(`/cloudflare/d1/databases/${databaseId}/query`, { sql }),
+  executeD1Batch: (databaseId: string, statements: string[]) =>
+    api.post(`/cloudflare/d1/databases/${databaseId}/batch`, { statements }),
+  listD1Tables: (databaseId: string) =>
+    api.get(`/cloudflare/d1/databases/${databaseId}/tables`),
+  getD1TableSchema: (databaseId: string, tableName: string) =>
+    api.get(`/cloudflare/d1/databases/${databaseId}/tables/${tableName}/schema`),
+
+  // Stream Videos
+  listStreamVideos: () => api.get('/cloudflare/stream/videos'),
+  getStreamVideo: (id: string) => api.get(`/cloudflare/stream/videos/${id}`),
+  deleteStreamVideo: (id: string) => api.delete(`/cloudflare/stream/videos/${id}`),
+  searchStreamVideos: (query: string) =>
+    api.get('/cloudflare/stream/videos/search', { params: { q: query } }),
+  getStreamVideoUrls: (id: string) => api.get(`/cloudflare/stream/videos/${id}/urls`),
+  getStreamEmbedCode: (id: string, options?: {
+    autoplay?: boolean;
+    muted?: boolean;
+    loop?: boolean;
+    controls?: boolean;
+    posterTime?: number;
+    startTime?: number;
+    width?: string;
+    height?: string;
+  }) => api.get(`/cloudflare/stream/videos/${id}/embed`, { params: options }),
+  getStreamStats: () => api.get('/cloudflare/stream/stats'),
+
+  // Stream Live Inputs
+  listLiveInputs: () => api.get('/cloudflare/stream/live-inputs'),
+  createLiveInput: (options: { name?: string; recordingMode?: string; timeoutSeconds?: number }) =>
+    api.post('/cloudflare/stream/live-inputs', {
+      name: options.name,
+      recording_mode: options.recordingMode,
+      timeout_seconds: options.timeoutSeconds,
+    }),
+  deleteLiveInput: (id: string) => api.delete(`/cloudflare/stream/live-inputs/${id}`),
+  getLiveInputUrls: (id: string) => api.get(`/cloudflare/stream/live-inputs/${id}/urls`),
 };
+
+export { api };

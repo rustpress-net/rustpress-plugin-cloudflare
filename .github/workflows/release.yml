@@ -26,6 +26,17 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-gnu,x86_64-pc-windows-gnu,x86_64-apple-darwin,aarch64-apple-darwin
+
+      - name: Install cross-compilation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64 libssl-dev pkg-config
+
       - name: Get current version
         id: current_version
         run: |
@@ -91,6 +102,19 @@ jobs:
           NEW_VERSION="${{ steps.new_version.outputs.version }}"
           sed -i "0,/^version = \"[^\"]*\"/s//version = \"$NEW_VERSION\"/" Cargo.toml
 
+      - name: Build Rust binary (Linux x86_64)
+        run: |
+          cargo build --release --target x86_64-unknown-linux-gnu
+        env:
+          SQLX_OFFLINE: true
+
+      - name: Build Rust binary (Windows x86_64)
+        run: |
+          cargo build --release --target x86_64-pc-windows-gnu
+        env:
+          SQLX_OFFLINE: true
+        continue-on-error: true
+
       - name: Build admin UI
         working-directory: admin-ui
         run: |
@@ -102,27 +126,56 @@ jobs:
           VERSION="${{ steps.new_version.outputs.version }}"
           PACKAGE_NAME="rustcloudflare-v${VERSION}"
 
-          # Create release directory
-          mkdir -p "release/${PACKAGE_NAME}"
+          # Create release directories for each platform
+          mkdir -p "release/${PACKAGE_NAME}-linux-x86_64"
+          mkdir -p "release/${PACKAGE_NAME}-windows-x86_64"
 
-          # Copy necessary files for a ready-to-use plugin
-          cp -r src "release/${PACKAGE_NAME}/"
-          cp -r migrations "release/${PACKAGE_NAME}/"
-          [ -d templates ] && cp -r templates "release/${PACKAGE_NAME}/" || true
-          [ -d assets ] && cp -r assets "release/${PACKAGE_NAME}/" || true
-          cp Cargo.toml "release/${PACKAGE_NAME}/"
-          cp plugin.toml "release/${PACKAGE_NAME}/"
+          # --- Linux x86_64 Package ---
+          # Copy compiled binary
+          if [ -f "target/x86_64-unknown-linux-gnu/release/librustcloudflare.so" ]; then
+            cp target/x86_64-unknown-linux-gnu/release/librustcloudflare.so "release/${PACKAGE_NAME}-linux-x86_64/"
+          elif [ -f "target/x86_64-unknown-linux-gnu/release/librustcloudflare.a" ]; then
+            cp target/x86_64-unknown-linux-gnu/release/librustcloudflare.a "release/${PACKAGE_NAME}-linux-x86_64/"
+          elif [ -f "target/x86_64-unknown-linux-gnu/release/rustcloudflare" ]; then
+            cp target/x86_64-unknown-linux-gnu/release/rustcloudflare "release/${PACKAGE_NAME}-linux-x86_64/"
+          fi
 
-          # Copy built admin UI (dist folder)
-          mkdir -p "release/${PACKAGE_NAME}/admin-ui"
-          cp -r admin-ui/dist "release/${PACKAGE_NAME}/admin-ui/"
-          cp admin-ui/package.json "release/${PACKAGE_NAME}/admin-ui/"
+          # Copy all .rlib files (Rust libraries)
+          find target/x86_64-unknown-linux-gnu/release -maxdepth 1 -name "*.rlib" -exec cp {} "release/${PACKAGE_NAME}-linux-x86_64/" \; 2>/dev/null || true
+
+          # Copy plugin metadata and assets
+          cp -r migrations "release/${PACKAGE_NAME}-linux-x86_64/"
+          [ -d templates ] && cp -r templates "release/${PACKAGE_NAME}-linux-x86_64/" || true
+          [ -d assets ] && cp -r assets "release/${PACKAGE_NAME}-linux-x86_64/" || true
+          cp plugin.toml "release/${PACKAGE_NAME}-linux-x86_64/"
+
+          # Copy built admin UI
+          mkdir -p "release/${PACKAGE_NAME}-linux-x86_64/admin-ui"
+          cp -r admin-ui/dist "release/${PACKAGE_NAME}-linux-x86_64/admin-ui/"
+
+          # --- Windows x86_64 Package ---
+          if [ -f "target/x86_64-pc-windows-gnu/release/rustcloudflare.dll" ]; then
+            cp target/x86_64-pc-windows-gnu/release/rustcloudflare.dll "release/${PACKAGE_NAME}-windows-x86_64/"
+          elif [ -f "target/x86_64-pc-windows-gnu/release/rustcloudflare.exe" ]; then
+            cp target/x86_64-pc-windows-gnu/release/rustcloudflare.exe "release/${PACKAGE_NAME}-windows-x86_64/"
+          fi
+
+          # Copy plugin metadata and assets for Windows
+          cp -r migrations "release/${PACKAGE_NAME}-windows-x86_64/"
+          [ -d templates ] && cp -r templates "release/${PACKAGE_NAME}-windows-x86_64/" || true
+          [ -d assets ] && cp -r assets "release/${PACKAGE_NAME}-windows-x86_64/" || true
+          cp plugin.toml "release/${PACKAGE_NAME}-windows-x86_64/"
+
+          # Copy built admin UI for Windows
+          mkdir -p "release/${PACKAGE_NAME}-windows-x86_64/admin-ui"
+          cp -r admin-ui/dist "release/${PACKAGE_NAME}-windows-x86_64/admin-ui/"
 
           # Create README for the release
-          cat > "release/${PACKAGE_NAME}/README.md" << 'EOF'
+          for dir in "release/${PACKAGE_NAME}-linux-x86_64" "release/${PACKAGE_NAME}-windows-x86_64"; do
+            cat > "$dir/README.md" << 'EOF'
           # RustCloudflare Plugin
 
-          Seamless Cloudflare integration for RustPress - CDN, DNS, Security, Workers, R2, KV, D1, and more.
+          Seamless Cloudflare integration for RustPress - CDN, DNS, Security, Workers, R2, KV, D1, Stream, and more.
 
           ## Installation
 
@@ -140,18 +193,37 @@ jobs:
           - RustPress 1.0.0 or higher
           - Cloudflare account with API token
 
+          ## Features
+
+          - Cache Management (purge by URL, tags, prefix)
+          - DNS Records Management
+          - SSL/TLS Configuration
+          - Security Settings (WAF, Firewall Rules, Under Attack Mode)
+          - Workers Deployment and KV Storage
+          - R2 Object Storage
+          - D1 Serverless Databases
+          - Stream Video Hosting
+          - Analytics and Traffic Insights
+
           ## Documentation
 
           Visit https://rustpress.io/plugins/rustcloudflare for full documentation.
           EOF
+          done
 
-          # Create zip file
+          # Create zip files
           cd release
-          zip -r "../${PACKAGE_NAME}.zip" "${PACKAGE_NAME}"
+          zip -r "../${PACKAGE_NAME}-linux-x86_64.zip" "${PACKAGE_NAME}-linux-x86_64"
+
+          # Only create Windows zip if the package has binaries
+          if [ -n "$(ls -A ${PACKAGE_NAME}-windows-x86_64/*.dll 2>/dev/null || ls -A ${PACKAGE_NAME}-windows-x86_64/*.exe 2>/dev/null)" ]; then
+            zip -r "../${PACKAGE_NAME}-windows-x86_64.zip" "${PACKAGE_NAME}-windows-x86_64"
+          fi
           cd ..
 
           echo "package_name=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
-          echo "zip_file=${PACKAGE_NAME}.zip" >> $GITHUB_OUTPUT
+          echo "linux_zip=${PACKAGE_NAME}-linux-x86_64.zip" >> $GITHUB_OUTPUT
+          echo "windows_zip=${PACKAGE_NAME}-windows-x86_64.zip" >> $GITHUB_OUTPUT
         id: package
 
       - name: Commit version bump
@@ -197,16 +269,27 @@ jobs:
 
             ### Installation
 
-            1. Download `${{ steps.package.outputs.zip_file }}` below
+            1. Download the appropriate package for your platform:
+               - **Linux x86_64**: `${{ steps.package.outputs.linux_zip }}`
+               - **Windows x86_64**: `${{ steps.package.outputs.windows_zip }}`
             2. Extract to your RustPress plugins directory
             3. Activate the plugin in the admin panel
+
+            ### What's Included
+
+            - Pre-compiled binary (no Rust source code)
+            - Built admin UI
+            - Database migrations
+            - Plugin configuration
 
             ### Changelog
 
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
           files: |
-            ${{ steps.package.outputs.zip_file }}
+            ${{ steps.package.outputs.linux_zip }}
+            ${{ steps.package.outputs.windows_zip }}
           draft: false
           prerelease: false
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -479,7 +479,8 @@ pub struct D1Database {
 /// D1 query result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct D1QueryResult {
-    pub results: Option<Vec<serde_json::Value>>,
+    #[serde(default)]
+    pub results: Vec<serde_json::Value>,
     pub success: bool,
     pub meta: Option<D1QueryMeta>,
 }
@@ -555,8 +556,20 @@ pub struct LiveInput {
     pub created: Option<DateTime<Utc>>,
     pub modified: Option<DateTime<Utc>>,
     pub meta: Option<serde_json::Value>,
-    pub status: Option<LiveInputStatus>,
+    pub status: Option<String>,
     pub recording: Option<LiveRecording>,
+}
+
+/// Stream statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamStats {
+    pub total_videos: usize,
+    pub total_duration_seconds: u64,
+    pub total_storage_bytes: u64,
+    pub ready_videos: usize,
+    pub processing_videos: usize,
+    pub live_inputs: usize,
+    pub active_live_streams: usize,
 }
 
 /// RTMPS info

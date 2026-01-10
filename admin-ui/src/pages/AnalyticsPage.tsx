@@ -92,7 +92,7 @@ export function AnalyticsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-100">Analytics</h1>
+          <h1 className="text-2xl font-bold text-neutral-100 flex items-center gap-3"><Activity className="w-7 h-7 text-orange-400" />Analytics</h1>
           <p className="text-neutral-400">
             Traffic insights and performance metrics
           </p>

@@ -165,7 +165,7 @@ export function R2Page() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-100">R2 Storage</h1>
+          <h1 className="text-2xl font-bold text-neutral-100 flex items-center gap-3"><HardDrive className="w-7 h-7 text-orange-400" />R2 Storage</h1>
           <p className="text-neutral-400">
             S3-compatible object storage at the edge
           </p>

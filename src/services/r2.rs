@@ -8,7 +8,9 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 pub struct R2Service {
+    #[allow(dead_code)]
     client: Option<Arc<CloudflareClient>>,
+    #[allow(dead_code)]
     db: PgPool,
     s3_client: Option<S3Client>,
 }
@@ -112,7 +114,7 @@ impl R2Service {
         Ok(())
     }
 
-    pub async fn get_presigned_url(&self, bucket: &str, key: &str, expires_in: u64) -> CloudflareResult<String> {
+    pub async fn get_presigned_url(&self, _bucket: &str, _key: &str, _expires_in: u64) -> CloudflareResult<String> {
         // R2 presigned URLs would be implemented here
         Err(CloudflareError::R2Error("Presigned URLs not implemented".into()))
     }

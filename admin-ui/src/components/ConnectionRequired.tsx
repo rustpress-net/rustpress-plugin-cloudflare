@@ -1,13 +1,23 @@
 import { useCloudflareStore } from '../stores/cloudflareStore';
-import { Settings, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Settings, AlertTriangle, ArrowRight, Bug } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useState } from 'react';
 
 interface ConnectionRequiredProps {
   children: React.ReactNode;
 }
 
+// In development mode, allow bypassing the connection requirement for testing
+const isDevelopment = import.meta.env.DEV;
+
 export function ConnectionRequired({ children }: ConnectionRequiredProps) {
   const { isConnected, isLoading } = useCloudflareStore();
+  const [devBypass, setDevBypass] = useState(false);
+
+  // In development mode with bypass enabled, skip the connection check
+  if (isDevelopment && devBypass) {
+    return <>{children}</>;
+  }
 
   // Show loading state while checking connection
   if (isLoading) {
@@ -74,6 +84,19 @@ export function ConnectionRequired({ children }: ConnectionRequiredProps) {
                 You'll need your API Token, Account ID, and Zone ID from the Cloudflare dashboard.
               </p>
             </div>
+
+            {/* Development mode bypass button */}
+            {isDevelopment && (
+              <div className="mt-4 pt-4 border-t border-neutral-700/50">
+                <button
+                  onClick={() => setDevBypass(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-neutral-700/50 hover:bg-neutral-700 text-neutral-400 hover:text-neutral-200 rounded-lg text-sm transition-colors"
+                >
+                  <Bug className="w-4 h-4" />
+                  Skip for Testing (Dev Only)
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </>

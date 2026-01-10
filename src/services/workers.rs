@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 pub struct WorkersService {
     client: Option<Arc<CloudflareClient>>,
+    #[allow(dead_code)]
     db: PgPool,
 }
 

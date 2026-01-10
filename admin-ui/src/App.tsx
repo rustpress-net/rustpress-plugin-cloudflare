@@ -18,6 +18,7 @@ import { R2Page } from './pages/R2Page';
 import { StreamPage } from './pages/StreamPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { RulesPage } from './pages/RulesPage';
+import { D1Page } from './pages/D1Page';
 import { SettingsPage } from './pages/SettingsPage';
 
 // Wrapper component for pages that require Cloudflare connection
@@ -66,6 +67,7 @@ export default function App() {
               <Route path="/workers" element={<Protected><WorkersPage /></Protected>} />
               <Route path="/r2" element={<Protected><R2Page /></Protected>} />
               <Route path="/stream" element={<Protected><StreamPage /></Protected>} />
+              <Route path="/d1" element={<Protected><D1Page /></Protected>} />
               <Route path="/analytics" element={<Protected><AnalyticsPage /></Protected>} />
               <Route path="/rules" element={<Protected><RulesPage /></Protected>} />
               {/* Settings page doesn't require connection - users need to configure credentials here */}

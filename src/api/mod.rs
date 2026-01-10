@@ -11,16 +11,19 @@ pub mod r2;
 pub mod ssl;
 pub mod stream;
 pub mod rules;
+pub mod d1;
 
 use axum::{
     routing::{get, post, put, delete, patch},
     Router,
 };
-use rustpress_core::AppContext;
+use std::sync::Arc;
+use crate::services::CloudflareServices;
 
-/// Register all API routes
-pub async fn register_routes(ctx: &AppContext) -> anyhow::Result<()> {
-    let router = Router::new()
+/// Create the API router with all routes
+/// This returns a Router that can be nested under /api/plugins/rustcloudflare
+pub fn create_router(services: Arc<CloudflareServices>) -> Router {
+    Router::new()
         // Status & Connection
         .route("/status", get(get_status))
         .route("/connection", get(oauth::get_connection_status))
@@ -102,11 +105,25 @@ pub async fn register_routes(ctx: &AppContext) -> anyhow::Result<()> {
 
         // Stream routes
         .route("/stream/videos", get(stream::list_videos))
+        .route("/stream/videos/search", get(stream::search_videos))
         .route("/stream/videos/:id", get(stream::get_video))
         .route("/stream/videos/:id", delete(stream::delete_video))
+        .route("/stream/videos/:id/urls", get(stream::get_video_urls))
+        .route("/stream/videos/:id/embed", get(stream::get_embed_code))
+        .route("/stream/stats", get(stream::get_stats))
         .route("/stream/live-inputs", get(stream::list_live_inputs))
         .route("/stream/live-inputs", post(stream::create_live_input))
         .route("/stream/live-inputs/:id", delete(stream::delete_live_input))
+        .route("/stream/live-inputs/:id/urls", get(stream::get_live_input_urls))
+
+        // D1 Database routes
+        .route("/d1/databases", get(d1::list_databases))
+        .route("/d1/databases", post(d1::create_database))
+        .route("/d1/databases/:id", get(d1::get_database))
+        .route("/d1/databases/:id/query", post(d1::execute_query))
+        .route("/d1/databases/:id/batch", post(d1::execute_batch))
+        .route("/d1/databases/:id/tables", get(d1::list_tables))
+        .route("/d1/databases/:id/tables/:table/schema", get(d1::get_table_schema))
 
         // Analytics routes
         .route("/analytics", get(analytics::get_analytics))
@@ -119,16 +136,10 @@ pub async fn register_routes(ctx: &AppContext) -> anyhow::Result<()> {
         .route("/zone", get(settings::get_zone_info))
         .route("/zone/settings", get(settings::get_zone_settings))
         .route("/zone/settings", patch(settings::update_zone_settings))
-        .route("/zone/development-mode", post(settings::toggle_dev_mode));
+        .route("/zone/development-mode", post(settings::toggle_dev_mode))
 
-    ctx.register_api_routes("rustcloudflare", router).await?;
-    Ok(())
-}
-
-/// Unregister API routes
-pub async fn unregister_routes(ctx: &AppContext) -> anyhow::Result<()> {
-    ctx.unregister_api_routes("rustcloudflare").await?;
-    Ok(())
+        // Add state to all routes
+        .with_state(services)
 }
 
 /// Get Cloudflare status

@@ -102,7 +102,7 @@ export function DnsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-100">DNS Management</h1>
+          <h1 className="text-2xl font-bold text-neutral-100 flex items-center gap-3"><Globe className="w-7 h-7 text-orange-400" />DNS Management</h1>
           <p className="text-neutral-400">Manage your domain's DNS records</p>
         </div>
         <div className="flex gap-3">

@@ -14,6 +14,7 @@ import {
   FileCode,
   Settings,
   AlertTriangle,
+  Cylinder,
 } from 'lucide-react';
 import { useCloudflareStore } from '../stores/cloudflareStore';
 import { clsx } from 'clsx';
@@ -27,6 +28,7 @@ const navigation = [
   { name: 'Performance', href: '/performance', icon: Zap },
   { name: 'Workers', href: '/workers', icon: Code },
   { name: 'R2 Storage', href: '/r2', icon: HardDrive },
+  { name: 'D1 Database', href: '/d1', icon: Cylinder },
   { name: 'Stream', href: '/stream', icon: Video },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Page Rules', href: '/rules', icon: FileCode },

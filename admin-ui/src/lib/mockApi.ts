@@ -21,6 +21,10 @@ import {
   mockR2Objects,
   mockStreamVideos,
   mockStreamLiveInputs,
+  mockStreamStats,
+  mockD1Databases,
+  mockD1Tables,
+  mockD1QueryResult,
   mockAnalytics,
   mockBandwidthStats,
   mockSecurityAnalytics,
@@ -116,6 +120,14 @@ const mockRoutes: Record<string, Record<string, MockHandler>> = {
       await delay(300);
       return mockResponse(mockStreamLiveInputs);
     },
+    '/cloudflare/stream/stats': async () => {
+      await delay(250);
+      return mockResponse(mockStreamStats);
+    },
+    '/cloudflare/d1/databases': async () => {
+      await delay(300);
+      return mockResponse(mockD1Databases);
+    },
     '/cloudflare/analytics': async () => {
       await delay(500);
       return mockResponse(mockAnalytics);
@@ -152,11 +164,75 @@ const mockRoutes: Record<string, Record<string, MockHandler>> = {
       await delay(200);
       return mockResponse(mockPluginSettings);
     },
+    '/cloudflare/auth/url': async () => {
+      await delay(100);
+      // In dev mode, simulate SSO by redirecting with mock data
+      const mockAccounts = [{ id: 'acc_mock123', name: 'My Cloudflare Account' }];
+      const mockZones = [
+        { id: 'zone_mock456', name: 'example.com', status: 'active' },
+        { id: 'zone_mock789', name: 'mysite.dev', status: 'active' },
+      ];
+      const mockToken = 'mock_sso_token_' + Date.now();
+      // Return a URL that will trigger the selection modal
+      const callbackUrl = `/settings?sso_token=${encodeURIComponent(mockToken)}&sso_accounts=${encodeURIComponent(JSON.stringify(mockAccounts))}&sso_zones=${encodeURIComponent(JSON.stringify(mockZones))}`;
+      return mockResponse(callbackUrl);
+    },
   },
   POST: {
     '/cloudflare/connection/test': async () => {
       await delay(800);
       return mockResponse({ success: true, message: 'Connection successful' });
+    },
+    '/cloudflare/auth/sso-complete': async () => {
+      await delay(500);
+      return mockResponse({
+        success: true,
+        connected: true,
+        message: 'Connected to Cloudflare successfully',
+        account: { id: 'acc_mock123', name: 'My Cloudflare Account' },
+        zone: { id: 'zone_mock456', name: 'example.com' },
+      });
+    },
+    '/cloudflare/auth/verify-token': async () => {
+      await delay(400);
+      return mockResponse({
+        valid: true,
+        accounts: [
+          { id: 'acc_mock123', name: 'My Cloudflare Account' },
+          { id: 'acc_mock456', name: 'Secondary Account' },
+        ],
+      });
+    },
+    '/cloudflare/auth/save-credentials': async () => {
+      await delay(500);
+      return mockResponse({
+        success: true,
+        connected: true,
+        message: 'Credentials saved successfully',
+      });
+    },
+    '/cloudflare/auth/disconnect': async () => {
+      await delay(300);
+      return mockResponse({ success: true, message: 'Disconnected from Cloudflare' });
+    },
+    '/cloudflare/auth/accounts': async () => {
+      await delay(400);
+      return mockResponse({
+        accounts: [
+          { id: 'acc_mock123', name: 'My Cloudflare Account' },
+          { id: 'acc_mock456', name: 'Secondary Account' },
+        ],
+      });
+    },
+    '/cloudflare/auth/zones': async () => {
+      await delay(400);
+      return mockResponse({
+        zones: [
+          { id: 'zone_mock456', name: 'example.com', status: 'active' },
+          { id: 'zone_mock789', name: 'mysite.dev', status: 'active' },
+          { id: 'zone_mock101', name: 'staging.io', status: 'pending' },
+        ],
+      });
     },
     '/cloudflare/cache/purge/all': async () => {
       await delay(600);
@@ -242,6 +318,14 @@ const mockRoutes: Record<string, Record<string, MockHandler>> = {
       await delay(600);
       return mockResponse({ success: true });
     },
+    '/cloudflare/d1/databases': async () => {
+      await delay(500);
+      return mockResponse({ uuid: `d1_${Date.now()}`, name: 'new-database', success: true });
+    },
+    '/cloudflare/stream/live-inputs': async () => {
+      await delay(600);
+      return mockResponse({ uid: `live_${Date.now()}`, success: true });
+    },
     '/cloudflare/page-rules': async () => {
       await delay(400);
       return mockResponse({ id: `rule_${Date.now()}`, success: true });
@@ -291,6 +375,34 @@ const patternRoutes: Record<string, PatternRoute[]> = {
       handler: async () => {
         await delay(300);
         return mockResponse(mockKVKeys);
+      },
+    },
+    {
+      pattern: /^\/cloudflare\/d1\/databases\/[^/]+\/tables$/,
+      handler: async () => {
+        await delay(250);
+        return mockResponse(mockD1Tables);
+      },
+    },
+    {
+      pattern: /^\/cloudflare\/d1\/databases\/[^/]+$/,
+      handler: async () => {
+        await delay(200);
+        return mockResponse(mockD1Databases.databases[0]);
+      },
+    },
+    {
+      pattern: /^\/cloudflare\/stream\/videos\/[^/]+\/embed$/,
+      handler: async () => {
+        await delay(200);
+        return mockResponse({ html: '<iframe src="https://customer-123.cloudflarestream.com/video_id/iframe" allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;" allowfullscreen="true" style="border: none; width: 100%; height: 100%;"></iframe>' });
+      },
+    },
+    {
+      pattern: /^\/cloudflare\/stream\/videos\/[^/]+$/,
+      handler: async () => {
+        await delay(200);
+        return mockResponse(mockStreamVideos.videos[0]);
       },
     },
     {
@@ -349,6 +461,13 @@ const patternRoutes: Record<string, PatternRoute[]> = {
       handler: async () => {
         await delay(400);
         return mockResponse({ success: true });
+      },
+    },
+    {
+      pattern: /^\/cloudflare\/d1\/databases\/[^/]+\/query$/,
+      handler: async () => {
+        await delay(300);
+        return mockResponse(mockD1QueryResult);
       },
     },
   ],
@@ -432,6 +551,20 @@ const patternRoutes: Record<string, PatternRoute[]> = {
         return mockResponse({ success: true });
       },
     },
+    {
+      pattern: /^\/cloudflare\/stream\/videos\/[^/]+$/,
+      handler: async () => {
+        await delay(300);
+        return mockResponse({ success: true });
+      },
+    },
+    {
+      pattern: /^\/cloudflare\/stream\/live-inputs\/[^/]+$/,
+      handler: async () => {
+        await delay(300);
+        return mockResponse({ success: true });
+      },
+    },
   ],
 };
 
@@ -458,6 +591,7 @@ export const findMockHandler = (method: string, url: string): MockHandler | null
 };
 
 // Check if mock mode is enabled
+// Set VITE_USE_MOCK=true to enable mock data, otherwise uses real backend
 export const isMockEnabled = (): boolean => {
-  return import.meta.env.DEV;
+  return import.meta.env.VITE_USE_MOCK === 'true';
 };

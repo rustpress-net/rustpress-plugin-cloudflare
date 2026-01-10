@@ -136,6 +136,54 @@ export function SettingsPage() {
     onError: () => toast.error('Failed to save settings'),
   });
 
+  // Auto-purge settings mutation
+  const updateAutoPurgeMutation = useMutation({
+    mutationFn: (data: {
+      auto_purge_enabled?: boolean;
+      auto_purge_on_post_update?: boolean;
+      auto_purge_on_media_upload?: boolean;
+      auto_purge_on_theme_change?: boolean;
+    }) => cloudflareApi.updateAutoPurgeSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plugin-settings'] });
+    },
+    onError: () => toast.error('Failed to update auto-purge settings'),
+  });
+
+  // Cache warming settings mutation
+  const updateCacheWarmingMutation = useMutation({
+    mutationFn: (data: { cache_warming_enabled?: boolean; cache_warming_schedule?: string }) =>
+      cloudflareApi.updateCacheWarmingSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plugin-settings'] });
+    },
+    onError: () => toast.error('Failed to update cache warming settings'),
+  });
+
+  // Notification settings mutation
+  const updateNotificationMutation = useMutation({
+    mutationFn: (data: { security_email_alerts?: boolean; security_slack_webhook?: string }) =>
+      cloudflareApi.updateNotificationSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plugin-settings'] });
+    },
+    onError: () => toast.error('Failed to update notification settings'),
+  });
+
+  // Advanced settings mutation
+  const updateAdvancedMutation = useMutation({
+    mutationFn: (data: {
+      development_mode_duration?: number;
+      analytics_retention_days?: number;
+      r2_default_bucket?: string;
+      workers_enabled?: boolean;
+    }) => cloudflareApi.updateAdvancedSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plugin-settings'] });
+    },
+    onError: () => toast.error('Failed to update advanced settings'),
+  });
+
   // Start SSO login
   const startSsoLogin = async () => {
     setSsoLoading(true);
@@ -229,7 +277,7 @@ export function SettingsPage() {
     <div className="p-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-neutral-100">Settings</h1>
+        <h1 className="text-2xl font-bold text-neutral-100 flex items-center gap-3"><Settings className="w-7 h-7 text-orange-400" />Settings</h1>
         <p className="text-neutral-400">Configure your Cloudflare integration</p>
       </div>
 
@@ -414,29 +462,32 @@ export function SettingsPage() {
                 label="Enable Auto-Purge"
                 description="Automatically purge Cloudflare cache on content changes"
                 enabled={currentSettings.auto_purge_enabled}
-                onChange={() => {}}
+                onChange={(enabled) => updateAutoPurgeMutation.mutate({ auto_purge_enabled: enabled })}
               />
 
-              <div className="pl-4 border-l-2 border-neutral-700 space-y-4">
+              <div className={clsx(
+                "pl-4 border-l-2 border-neutral-700 space-y-4 transition-opacity",
+                !currentSettings.auto_purge_enabled && "opacity-50 pointer-events-none"
+              )}>
                 <ToggleSetting
                   label="On Post Update"
                   description="Purge when a post or page is published or updated"
                   enabled={currentSettings.auto_purge_on_post_update}
-                  onChange={() => {}}
+                  onChange={(enabled) => updateAutoPurgeMutation.mutate({ auto_purge_on_post_update: enabled })}
                 />
 
                 <ToggleSetting
                   label="On Media Upload"
                   description="Purge when media files are uploaded or deleted"
                   enabled={currentSettings.auto_purge_on_media_upload}
-                  onChange={() => {}}
+                  onChange={(enabled) => updateAutoPurgeMutation.mutate({ auto_purge_on_media_upload: enabled })}
                 />
 
                 <ToggleSetting
                   label="On Theme Change"
                   description="Purge when theme or plugins are changed"
                   enabled={currentSettings.auto_purge_on_theme_change}
-                  onChange={() => {}}
+                  onChange={(enabled) => updateAutoPurgeMutation.mutate({ auto_purge_on_theme_change: enabled })}
                 />
               </div>
             </div>
@@ -461,15 +512,16 @@ export function SettingsPage() {
                 label="Enable Cache Warming"
                 description="Automatically warm cache after purge operations"
                 enabled={currentSettings.cache_warming_enabled}
-                onChange={() => {}}
+                onChange={(enabled) => updateCacheWarmingMutation.mutate({ cache_warming_enabled: enabled })}
               />
 
-              <div>
+              <div className={clsx(!currentSettings.cache_warming_enabled && "opacity-50 pointer-events-none")}>
                 <label className="block text-sm font-medium text-neutral-300 mb-1">
                   Warming Schedule
                 </label>
                 <select
-                  defaultValue={currentSettings.cache_warming_schedule}
+                  value={currentSettings.cache_warming_schedule || 'immediate'}
+                  onChange={(e) => updateCacheWarmingMutation.mutate({ cache_warming_schedule: e.target.value })}
                   className="w-full px-3 py-2 border border-neutral-700 rounded-lg bg-neutral-900 text-neutral-100 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                 >
                   <option value="immediate">Immediately after purge</option>
@@ -500,7 +552,7 @@ export function SettingsPage() {
                 label="Email Alerts"
                 description="Receive email notifications for security events"
                 enabled={currentSettings.security_email_alerts}
-                onChange={() => {}}
+                onChange={(enabled) => updateNotificationMutation.mutate({ security_email_alerts: enabled })}
               />
 
               <div>
@@ -510,7 +562,12 @@ export function SettingsPage() {
                 <input
                   type="url"
                   placeholder="https://hooks.slack.com/services/..."
-                  defaultValue={currentSettings.security_slack_webhook}
+                  defaultValue={currentSettings.security_slack_webhook || ''}
+                  onBlur={(e) => {
+                    if (e.target.value !== currentSettings.security_slack_webhook) {
+                      updateNotificationMutation.mutate({ security_slack_webhook: e.target.value });
+                    }
+                  }}
                   className="w-full px-3 py-2 border border-neutral-700 rounded-lg bg-neutral-900 text-neutral-100 placeholder-neutral-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                 />
                 <p className="text-xs text-neutral-500 mt-1">
@@ -540,7 +597,8 @@ export function SettingsPage() {
                   Development Mode Duration (minutes)
                 </label>
                 <select
-                  defaultValue={currentSettings.development_mode_duration}
+                  value={currentSettings.development_mode_duration || 180}
+                  onChange={(e) => updateAdvancedMutation.mutate({ development_mode_duration: parseInt(e.target.value) })}
                   className="w-full px-3 py-2 border border-neutral-700 rounded-lg bg-neutral-900 text-neutral-100 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                 >
                   <option value={60}>1 hour</option>
@@ -556,7 +614,8 @@ export function SettingsPage() {
                   Analytics Retention (days)
                 </label>
                 <select
-                  defaultValue={currentSettings.analytics_retention_days}
+                  value={currentSettings.analytics_retention_days || 30}
+                  onChange={(e) => updateAdvancedMutation.mutate({ analytics_retention_days: parseInt(e.target.value) })}
                   className="w-full px-3 py-2 border border-neutral-700 rounded-lg bg-neutral-900 text-neutral-100 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                 >
                   <option value={7}>7 days</option>
@@ -573,7 +632,12 @@ export function SettingsPage() {
                 <input
                   type="text"
                   placeholder="my-default-bucket"
-                  defaultValue={currentSettings.r2_default_bucket}
+                  defaultValue={currentSettings.r2_default_bucket || ''}
+                  onBlur={(e) => {
+                    if (e.target.value !== currentSettings.r2_default_bucket) {
+                      updateAdvancedMutation.mutate({ r2_default_bucket: e.target.value });
+                    }
+                  }}
                   className="w-full px-3 py-2 border border-neutral-700 rounded-lg bg-neutral-900 text-neutral-100 placeholder-neutral-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                 />
               </div>
@@ -582,7 +646,7 @@ export function SettingsPage() {
                 label="Enable Workers"
                 description="Allow deploying and managing Cloudflare Workers"
                 enabled={currentSettings.workers_enabled}
-                onChange={() => {}}
+                onChange={(enabled) => updateAdvancedMutation.mutate({ workers_enabled: enabled })}
               />
             </div>
           </div>

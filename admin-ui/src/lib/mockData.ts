@@ -404,57 +404,125 @@ export const mockR2Objects = [
   },
 ];
 
-export const mockStreamVideos = [
-  {
-    uid: 'video_001',
-    name: 'Product Demo 2025',
-    duration: 245,
-    size: 125000000,
-    status: 'ready',
-    thumbnail: 'https://placehold.co/320x180/f97316/fff?text=Product+Demo',
-    created_at: '2025-01-03T10:00:00Z',
-    views: 1520,
-  },
-  {
-    uid: 'video_002',
-    name: 'Tutorial - Getting Started',
-    duration: 480,
-    size: 250000000,
-    status: 'ready',
-    thumbnail: 'https://placehold.co/320x180/f97316/fff?text=Tutorial',
-    created_at: '2024-12-15T14:30:00Z',
-    views: 3250,
-  },
-  {
-    uid: 'video_003',
-    name: 'Webinar Recording',
-    duration: 3600,
-    size: 1500000000,
-    status: 'processing',
-    thumbnail: 'https://placehold.co/320x180/666/fff?text=Processing',
-    created_at: '2025-01-08T09:00:00Z',
-    views: 0,
-  },
-];
+export const mockStreamVideos = {
+  videos: [
+    {
+      uid: 'video_001',
+      thumbnail: 'https://placehold.co/320x180/f97316/fff?text=Product+Demo',
+      readyToStream: true,
+      status: { state: 'ready' },
+      meta: { name: 'Product Demo 2025' },
+      created: '2025-01-03T10:00:00Z',
+      duration: 245,
+      size: 125000000,
+      playback: { hls: 'https://customer-123.cloudflarestream.com/video_001/manifest.m3u8' },
+      preview: 'https://customer-123.cloudflarestream.com/video_001/watch',
+    },
+    {
+      uid: 'video_002',
+      thumbnail: 'https://placehold.co/320x180/f97316/fff?text=Tutorial',
+      readyToStream: true,
+      status: { state: 'ready' },
+      meta: { name: 'Tutorial - Getting Started' },
+      created: '2024-12-15T14:30:00Z',
+      duration: 480,
+      size: 250000000,
+      playback: { hls: 'https://customer-123.cloudflarestream.com/video_002/manifest.m3u8' },
+      preview: 'https://customer-123.cloudflarestream.com/video_002/watch',
+    },
+    {
+      uid: 'video_003',
+      thumbnail: 'https://placehold.co/320x180/666/fff?text=Processing',
+      readyToStream: false,
+      status: { state: 'processing' },
+      meta: { name: 'Webinar Recording' },
+      created: '2025-01-08T09:00:00Z',
+      duration: 3600,
+      size: 1500000000,
+      playback: {},
+      preview: null,
+    },
+  ],
+};
 
-export const mockStreamLiveInputs = [
-  {
-    uid: 'live_001',
-    name: 'Main Studio',
-    status: 'connected',
-    rtmps_url: 'rtmps://live.cloudflare.com:443/live',
-    rtmps_key: 'live_key_abc123',
-    created_at: '2024-10-01T00:00:00Z',
+export const mockStreamStats = {
+  total_videos: 3,
+  total_duration_seconds: 4325,
+  total_storage_bytes: 1875000000,
+  ready_videos: 2,
+  processing_videos: 1,
+  live_inputs: 2,
+  active_live_streams: 1,
+};
+
+export const mockStreamLiveInputs = {
+  live_inputs: [
+    {
+      uid: 'live_001',
+      meta: { name: 'Main Studio' },
+      created: '2024-10-01T00:00:00Z',
+      rtmps: { url: 'rtmps://live.cloudflare.com:443/live', streamKey: 'live_key_abc123' },
+      srt: { url: 'srt://live.cloudflare.com:778', streamId: 'live_001' },
+      webRTC: { url: 'https://customer-123.cloudflarestream.com/live_001/webRTC/publish' },
+      status: { current: { state: 'connected' } },
+    },
+    {
+      uid: 'live_002',
+      meta: { name: 'Backup Stream' },
+      created: '2024-11-15T00:00:00Z',
+      rtmps: { url: 'rtmps://live.cloudflare.com:443/live', streamKey: 'live_key_def456' },
+      srt: { url: 'srt://live.cloudflare.com:778', streamId: 'live_002' },
+      webRTC: { url: 'https://customer-123.cloudflarestream.com/live_002/webRTC/publish' },
+      status: { current: { state: 'idle' } },
+    },
+  ],
+};
+
+export const mockD1Databases = {
+  databases: [
+    {
+      uuid: 'd1_001',
+      name: 'production-db',
+      version: 'v1',
+      num_tables: 12,
+      file_size: 5242880,
+      created_at: '2024-06-15T10:00:00Z',
+    },
+    {
+      uuid: 'd1_002',
+      name: 'analytics-db',
+      version: 'v1',
+      num_tables: 8,
+      file_size: 10485760,
+      created_at: '2024-08-20T14:30:00Z',
+    },
+    {
+      uuid: 'd1_003',
+      name: 'cache-db',
+      version: 'v1',
+      num_tables: 3,
+      file_size: 1048576,
+      created_at: '2024-10-01T09:00:00Z',
+    },
+  ],
+};
+
+export const mockD1Tables = ['users', 'posts', 'comments', 'sessions', 'settings'];
+
+export const mockD1QueryResult = {
+  results: [
+    { id: 1, name: 'users', type: 'table', tbl_name: 'users', rootpage: 2, sql: 'CREATE TABLE users (...)' },
+    { id: 2, name: 'posts', type: 'table', tbl_name: 'posts', rootpage: 3, sql: 'CREATE TABLE posts (...)' },
+    { id: 3, name: 'comments', type: 'table', tbl_name: 'comments', rootpage: 4, sql: 'CREATE TABLE comments (...)' },
+  ],
+  success: true,
+  meta: {
+    duration: 0.5,
+    changes: 0,
+    rows_read: 3,
+    rows_written: 0,
   },
-  {
-    uid: 'live_002',
-    name: 'Backup Stream',
-    status: 'disconnected',
-    rtmps_url: 'rtmps://live.cloudflare.com:443/live',
-    rtmps_key: 'live_key_def456',
-    created_at: '2024-11-15T00:00:00Z',
-  },
-];
+};
 
 export const mockAnalytics = {
   summary: {

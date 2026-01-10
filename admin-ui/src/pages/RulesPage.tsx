@@ -86,7 +86,7 @@ export function RulesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-100">Page Rules</h1>
+          <h1 className="text-2xl font-bold text-neutral-100 flex items-center gap-3"><FileText className="w-7 h-7 text-orange-400" />Page Rules</h1>
           <p className="text-neutral-400">
             Configure URL-based behaviors and settings
           </p>

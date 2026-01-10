@@ -5,10 +5,16 @@
 use crate::config::CloudflareConfig;
 use crate::error::{CloudflareError, CloudflareResult};
 use crate::models::*;
-use reqwest::{header, Client, Response};
+use reqwest::{header, Client, Response, StatusCode};
 use serde::{de::DeserializeOwned, Serialize};
 use std::time::Duration;
+use tokio::time::sleep;
 use tracing::{debug, error, warn};
+
+/// Default max retry attempts
+const MAX_RETRIES: u32 = 3;
+/// Base delay for exponential backoff (milliseconds)
+const BASE_DELAY_MS: u64 = 1000;
 
 /// Base URL for Cloudflare API
 const API_BASE_URL: &str = "https://api.cloudflare.com/client/v4";
@@ -17,6 +23,7 @@ const API_BASE_URL: &str = "https://api.cloudflare.com/client/v4";
 #[derive(Debug, Clone)]
 pub struct CloudflareClient {
     client: Client,
+    #[allow(dead_code)]
     api_token: String,
     account_id: String,
     zone_id: String,
@@ -81,61 +88,192 @@ impl CloudflareClient {
         }
     }
 
-    /// Make a GET request
-    async fn get<T: DeserializeOwned>(&self, endpoint: &str) -> CloudflareResult<ApiResponse<T>> {
-        let url = format!("{}{}", API_BASE_URL, endpoint);
-        debug!("GET {}", url);
-
-        let response = self.client.get(&url).send().await?;
-        self.handle_response(response).await
+    /// Check if an error is retryable
+    fn is_retryable_error(status: StatusCode) -> bool {
+        matches!(
+            status,
+            StatusCode::TOO_MANY_REQUESTS
+                | StatusCode::SERVICE_UNAVAILABLE
+                | StatusCode::GATEWAY_TIMEOUT
+                | StatusCode::BAD_GATEWAY
+        )
     }
 
-    /// Make a POST request
+    /// Calculate backoff delay with exponential increase and jitter
+    fn calculate_backoff(attempt: u32) -> Duration {
+        let base_delay = BASE_DELAY_MS * 2u64.pow(attempt);
+        let jitter = rand::random::<u64>() % 500;
+        Duration::from_millis(base_delay + jitter)
+    }
+
+    /// Make a GET request with retry logic
+    async fn get<T: DeserializeOwned>(&self, endpoint: &str) -> CloudflareResult<ApiResponse<T>> {
+        let url = format!("{}{}", API_BASE_URL, endpoint);
+
+        for attempt in 0..MAX_RETRIES {
+            debug!("GET {} (attempt {})", url, attempt + 1);
+
+            match self.client.get(&url).send().await {
+                Ok(response) => {
+                    let status = response.status();
+                    if Self::is_retryable_error(status) && attempt < MAX_RETRIES - 1 {
+                        let delay = Self::calculate_backoff(attempt);
+                        warn!("Retryable error {} for GET {}, retrying in {:?}", status, url, delay);
+                        sleep(delay).await;
+                        continue;
+                    }
+                    return self.handle_response(response).await;
+                }
+                Err(e) if attempt < MAX_RETRIES - 1 && e.is_timeout() => {
+                    let delay = Self::calculate_backoff(attempt);
+                    warn!("Timeout for GET {}, retrying in {:?}", url, delay);
+                    sleep(delay).await;
+                    continue;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+
+        Err(CloudflareError::NetworkError("Max retries exceeded".to_string()))
+    }
+
+    /// Make a POST request with retry logic
     async fn post<T: DeserializeOwned, B: Serialize>(
         &self,
         endpoint: &str,
         body: &B,
     ) -> CloudflareResult<ApiResponse<T>> {
         let url = format!("{}{}", API_BASE_URL, endpoint);
-        debug!("POST {}", url);
+        let body_json = serde_json::to_value(body).map_err(|e| CloudflareError::Internal(e.to_string()))?;
 
-        let response = self.client.post(&url).json(body).send().await?;
-        self.handle_response(response).await
+        for attempt in 0..MAX_RETRIES {
+            debug!("POST {} (attempt {})", url, attempt + 1);
+
+            match self.client.post(&url).json(&body_json).send().await {
+                Ok(response) => {
+                    let status = response.status();
+                    if Self::is_retryable_error(status) && attempt < MAX_RETRIES - 1 {
+                        let delay = Self::calculate_backoff(attempt);
+                        warn!("Retryable error {} for POST {}, retrying in {:?}", status, url, delay);
+                        sleep(delay).await;
+                        continue;
+                    }
+                    return self.handle_response(response).await;
+                }
+                Err(e) if attempt < MAX_RETRIES - 1 && e.is_timeout() => {
+                    let delay = Self::calculate_backoff(attempt);
+                    warn!("Timeout for POST {}, retrying in {:?}", url, delay);
+                    sleep(delay).await;
+                    continue;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+
+        Err(CloudflareError::NetworkError("Max retries exceeded".to_string()))
     }
 
-    /// Make a PUT request
+    /// Make a PUT request with retry logic
     async fn put<T: DeserializeOwned, B: Serialize>(
         &self,
         endpoint: &str,
         body: &B,
     ) -> CloudflareResult<ApiResponse<T>> {
         let url = format!("{}{}", API_BASE_URL, endpoint);
-        debug!("PUT {}", url);
+        let body_json = serde_json::to_value(body).map_err(|e| CloudflareError::Internal(e.to_string()))?;
 
-        let response = self.client.put(&url).json(body).send().await?;
-        self.handle_response(response).await
+        for attempt in 0..MAX_RETRIES {
+            debug!("PUT {} (attempt {})", url, attempt + 1);
+
+            match self.client.put(&url).json(&body_json).send().await {
+                Ok(response) => {
+                    let status = response.status();
+                    if Self::is_retryable_error(status) && attempt < MAX_RETRIES - 1 {
+                        let delay = Self::calculate_backoff(attempt);
+                        warn!("Retryable error {} for PUT {}, retrying in {:?}", status, url, delay);
+                        sleep(delay).await;
+                        continue;
+                    }
+                    return self.handle_response(response).await;
+                }
+                Err(e) if attempt < MAX_RETRIES - 1 && e.is_timeout() => {
+                    let delay = Self::calculate_backoff(attempt);
+                    warn!("Timeout for PUT {}, retrying in {:?}", url, delay);
+                    sleep(delay).await;
+                    continue;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+
+        Err(CloudflareError::NetworkError("Max retries exceeded".to_string()))
     }
 
-    /// Make a PATCH request
+    /// Make a PATCH request with retry logic
     async fn patch<T: DeserializeOwned, B: Serialize>(
         &self,
         endpoint: &str,
         body: &B,
     ) -> CloudflareResult<ApiResponse<T>> {
         let url = format!("{}{}", API_BASE_URL, endpoint);
-        debug!("PATCH {}", url);
+        let body_json = serde_json::to_value(body).map_err(|e| CloudflareError::Internal(e.to_string()))?;
 
-        let response = self.client.patch(&url).json(body).send().await?;
-        self.handle_response(response).await
+        for attempt in 0..MAX_RETRIES {
+            debug!("PATCH {} (attempt {})", url, attempt + 1);
+
+            match self.client.patch(&url).json(&body_json).send().await {
+                Ok(response) => {
+                    let status = response.status();
+                    if Self::is_retryable_error(status) && attempt < MAX_RETRIES - 1 {
+                        let delay = Self::calculate_backoff(attempt);
+                        warn!("Retryable error {} for PATCH {}, retrying in {:?}", status, url, delay);
+                        sleep(delay).await;
+                        continue;
+                    }
+                    return self.handle_response(response).await;
+                }
+                Err(e) if attempt < MAX_RETRIES - 1 && e.is_timeout() => {
+                    let delay = Self::calculate_backoff(attempt);
+                    warn!("Timeout for PATCH {}, retrying in {:?}", url, delay);
+                    sleep(delay).await;
+                    continue;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+
+        Err(CloudflareError::NetworkError("Max retries exceeded".to_string()))
     }
 
-    /// Make a DELETE request
+    /// Make a DELETE request with retry logic
     async fn delete<T: DeserializeOwned>(&self, endpoint: &str) -> CloudflareResult<ApiResponse<T>> {
         let url = format!("{}{}", API_BASE_URL, endpoint);
-        debug!("DELETE {}", url);
 
-        let response = self.client.delete(&url).send().await?;
-        self.handle_response(response).await
+        for attempt in 0..MAX_RETRIES {
+            debug!("DELETE {} (attempt {})", url, attempt + 1);
+
+            match self.client.delete(&url).send().await {
+                Ok(response) => {
+                    let status = response.status();
+                    if Self::is_retryable_error(status) && attempt < MAX_RETRIES - 1 {
+                        let delay = Self::calculate_backoff(attempt);
+                        warn!("Retryable error {} for DELETE {}, retrying in {:?}", status, url, delay);
+                        sleep(delay).await;
+                        continue;
+                    }
+                    return self.handle_response(response).await;
+                }
+                Err(e) if attempt < MAX_RETRIES - 1 && e.is_timeout() => {
+                    let delay = Self::calculate_backoff(attempt);
+                    warn!("Timeout for DELETE {}, retrying in {:?}", url, delay);
+                    sleep(delay).await;
+                    continue;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+
+        Err(CloudflareError::NetworkError("Max retries exceeded".to_string()))
     }
 
     /// Handle API response
