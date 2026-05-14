@@ -166,15 +166,11 @@ const mockRoutes: Record<string, Record<string, MockHandler>> = {
     },
     '/cloudflare/auth/url': async () => {
       await delay(100);
-      // In dev mode, simulate SSO by redirecting with mock data
-      const mockAccounts = [{ id: 'acc_mock123', name: 'My Cloudflare Account' }];
-      const mockZones = [
-        { id: 'zone_mock456', name: 'example.com', status: 'active' },
-        { id: 'zone_mock789', name: 'mysite.dev', status: 'active' },
-      ];
-      const mockToken = 'mock_sso_token_' + Date.now();
-      // Return a URL that will trigger the selection modal
-      const callbackUrl = `/settings?sso_token=${encodeURIComponent(mockToken)}&sso_accounts=${encodeURIComponent(JSON.stringify(mockAccounts))}&sso_zones=${encodeURIComponent(JSON.stringify(mockZones))}`;
+      // Dev mode: pretend the OAuth dance happened and emit a mock
+      // handoff ID. The real backend now keeps the token server-side
+      // and only the handoff ID rides through the URL.
+      const mockHandoffId = '00000000-0000-4000-8000-' + Date.now().toString().padStart(12, '0');
+      const callbackUrl = `/settings?sso_handoff=${encodeURIComponent(mockHandoffId)}`;
       return mockResponse(callbackUrl);
     },
   },
@@ -370,6 +366,31 @@ interface PatternRoute {
 
 const patternRoutes: Record<string, PatternRoute[]> = {
   GET: [
+    {
+      // SSO multi-account picker: return the resources the UI needs to
+      // render. The mock (and real backend) deliberately do NOT return
+      // the access token here — it's recovered server-side only when
+      // /auth/sso-complete consumes the same handoff ID.
+      pattern: /^\/cloudflare\/auth\/sso-handoff\/[^/]+$/,
+      handler: async () => {
+        await delay(150);
+        const mockAccounts = [{ id: 'acc_mock123', name: 'My Cloudflare Account' }];
+        const mockZones = [
+          { id: 'zone_mock456', name: 'example.com', status: 'active' },
+          { id: 'zone_mock789', name: 'mysite.dev', status: 'active' },
+        ];
+        return {
+          data: {
+            success: true,
+            resources: { accounts: mockAccounts, zones: mockZones },
+          },
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config: {} as InternalAxiosRequestConfig,
+        };
+      },
+    },
     {
       pattern: /^\/cloudflare\/workers\/kv\/namespaces\/[^/]+\/keys$/,
       handler: async () => {

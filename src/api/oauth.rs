@@ -1,13 +1,14 @@
 //! OAuth API handlers for Cloudflare SSO
 
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     response::{IntoResponse, Redirect},
     Json,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use crate::error::CloudflareResult;
+use uuid::Uuid;
+use crate::error::{CloudflareError, CloudflareResult};
 use crate::services::{CloudflareServices, TokenResources};
 use tracing::{info, error};
 
@@ -43,12 +44,28 @@ pub struct SaveCredentialsRequest {
     pub zone_id: String,
 }
 
-/// SSO Connect request - for one-step SSO flow
+/// SSO Connect request - completes the multi-account/zone flow by
+/// quoting a one-shot handoff ID issued during /auth/callback.
+///
+/// The previous shape exposed the OAuth access token in the redirect
+/// URL query string (visible in logs, browser history, referrer headers).
+/// We now keep the token server-side and only pass an opaque handoff ID.
 #[derive(Debug, Deserialize)]
 pub struct SsoConnectRequest {
-    pub access_token: String,
+    pub handoff_id: Uuid,
     pub account_id: Option<String>,
     pub zone_id: Option<String>,
+}
+
+/// Response from the handoff lookup endpoint. Returns the discovered
+/// resources for the frontend to render a selection UI. Notably does
+/// NOT include the access token — that stays in the server-side store
+/// until /auth/sso-complete consumes the same handoff ID.
+#[derive(Debug, Serialize)]
+pub struct SsoHandoffResources {
+    pub success: bool,
+    pub resources: Option<TokenResources>,
+    pub error: Option<String>,
 }
 
 /// SSO Connect response
@@ -181,28 +198,73 @@ pub async fn oauth_callback(
             }
         }
     } else {
-        // Multiple accounts/zones - pass token to frontend for selection
-        // Encode account and zone info for the frontend
-        let accounts_json = serde_json::to_string(&resources.accounts).unwrap_or_default();
-        let zones_json = serde_json::to_string(&resources.zones).unwrap_or_default();
+        // Multiple accounts/zones - the user needs to pick.
+        //
+        // Previous behaviour leaked the access token in the redirect URL
+        // (visible to access logs, browser history, referrer headers).
+        // We now stash the token + resources server-side, keyed by a
+        // short-lived (10-minute) one-shot UUID, and only the UUID rides
+        // back to the frontend.
+        let handoff_id = services
+            .sso_handoff
+            .insert(tokens.access_token.clone(), resources)
+            .await;
 
         Redirect::to(&format!(
-            "/admin/cloudflare/settings?sso_token={}&sso_accounts={}&sso_zones={}",
-            urlencoding::encode(&tokens.access_token),
-            urlencoding::encode(&accounts_json),
-            urlencoding::encode(&zones_json)
+            "/admin/cloudflare/settings?sso_handoff={}",
+            handoff_id
         ))
     }
 }
 
-/// Complete SSO connection with selected account and zone
-/// Called from frontend when user selects from multiple accounts/zones
+/// Look up the resources discovered for a pending SSO handoff so the
+/// frontend can render an account/zone picker. The access token is
+/// intentionally not returned — it stays server-side and is consumed
+/// only by `/auth/sso-complete`.
+pub async fn get_sso_handoff(
+    State(services): State<Arc<CloudflareServices>>,
+    Path(handoff_id): Path<Uuid>,
+) -> Json<SsoHandoffResources> {
+    match services.sso_handoff.peek_resources(&handoff_id).await {
+        Some(resources) => Json(SsoHandoffResources {
+            success: true,
+            resources: Some(resources),
+            error: None,
+        }),
+        None => Json(SsoHandoffResources {
+            success: false,
+            resources: None,
+            error: Some(
+                "SSO handoff not found or expired. Please restart the OAuth flow.".to_string(),
+            ),
+        }),
+    }
+}
+
+/// Complete SSO connection with selected account and zone.
+///
+/// Called by the frontend after the user picks an account/zone from the
+/// resources returned by `/auth/sso-handoff/:id`. The request quotes the
+/// same handoff ID; the server consumes it (one-shot) to recover the
+/// access token, then proceeds with verification and credential save.
 pub async fn sso_complete(
     State(services): State<Arc<CloudflareServices>>,
     Json(req): Json<SsoConnectRequest>,
 ) -> CloudflareResult<Json<SsoConnectResponse>> {
+    // Consume the handoff: one-shot, removes the entry whether we
+    // succeed downstream or not so a leaked ID can't be replayed.
+    let access_token = services
+        .sso_handoff
+        .consume(&req.handoff_id)
+        .await
+        .ok_or_else(|| {
+            CloudflareError::ValidationError(
+                "SSO handoff not found or expired. Please restart the OAuth flow.".to_string(),
+            )
+        })?;
+
     // Verify the token is still valid
-    let valid = services.oauth.verify_token(&req.access_token).await?;
+    let valid = services.oauth.verify_token(&access_token).await?;
 
     if !valid {
         return Ok(Json(SsoConnectResponse {
@@ -216,7 +278,7 @@ pub async fn sso_complete(
     }
 
     // Get resources to validate selection
-    let resources = services.oauth.get_token_resources(&req.access_token).await?;
+    let resources = services.oauth.get_token_resources(&access_token).await?;
 
     // Determine account and zone IDs
     let account_id = req.account_id.or_else(|| {
@@ -270,7 +332,7 @@ pub async fn sso_complete(
 
     // Save credentials
     let credentials = crate::services::CloudflareCredentials {
-        api_token: req.access_token,
+        api_token: access_token,
         account_id: account_id.clone(),
         zone_id: zone_id.clone(),
     };

@@ -62,8 +62,10 @@ export const cloudflareApi = {
 
   // SSO Authentication
   getSsoAuthUrl: () => api.get('/cloudflare/auth/url'),
-  ssoComplete: (accessToken: string, accountId?: string, zoneId?: string) =>
-    api.post('/cloudflare/auth/sso-complete', { access_token: accessToken, account_id: accountId, zone_id: zoneId }),
+  getSsoHandoff: (handoffId: string) =>
+    api.get(`/cloudflare/auth/sso-handoff/${encodeURIComponent(handoffId)}`),
+  ssoComplete: (handoffId: string, accountId?: string, zoneId?: string) =>
+    api.post('/cloudflare/auth/sso-complete', { handoff_id: handoffId, account_id: accountId, zone_id: zoneId }),
   verifyToken: (apiToken: string) => api.post('/cloudflare/auth/verify-token', { api_token: apiToken }),
   saveCredentials: (apiToken: string, accountId: string, zoneId: string) =>
     api.post('/cloudflare/auth/save-credentials', { api_token: apiToken, account_id: accountId, zone_id: zoneId }),

@@ -31,6 +31,7 @@ pub fn create_router(services: Arc<CloudflareServices>) -> Router {
         // OAuth / Authentication routes
         .route("/auth/url", get(oauth::get_auth_url))
         .route("/auth/callback", get(oauth::oauth_callback))
+        .route("/auth/sso-handoff/:id", get(oauth::get_sso_handoff))
         .route("/auth/sso-complete", post(oauth::sso_complete))
         .route("/auth/verify-token", post(oauth::verify_token))
         .route("/auth/save-credentials", post(oauth::save_credentials))

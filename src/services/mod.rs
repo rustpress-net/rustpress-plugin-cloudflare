@@ -12,6 +12,7 @@ pub mod stream;
 pub mod analytics;
 pub mod settings;
 pub mod oauth;
+pub mod sso_handoff;
 
 use crate::client::CloudflareClient;
 use sqlx::PgPool;
@@ -21,6 +22,7 @@ pub use settings::{SettingsService, CloudflareCredentials, PluginSettings};
 pub use oauth::{OAuthService, OAuthConfig, TokenResources};
 pub use d1::D1Service;
 pub use stream::{StreamService, EmbedOptions};
+pub use sso_handoff::SsoHandoffStore;
 
 /// Main services container
 pub struct CloudflareServices {
@@ -34,6 +36,7 @@ pub struct CloudflareServices {
     pub analytics: analytics::AnalyticsService,
     pub settings: settings::SettingsService,
     pub oauth: oauth::OAuthService,
+    pub sso_handoff: SsoHandoffStore,
 }
 
 impl CloudflareServices {
@@ -50,6 +53,7 @@ impl CloudflareServices {
             analytics: analytics::AnalyticsService::new(Arc::clone(&client), db.clone()),
             settings: settings::SettingsService::new(db.clone()),
             oauth: oauth::OAuthService::new(),
+            sso_handoff: SsoHandoffStore::new(),
         }
     }
 
@@ -68,6 +72,7 @@ impl CloudflareServices {
             analytics: analytics::AnalyticsService::new_unconfigured(db.clone()),
             settings: settings::SettingsService::new(db.clone()),
             oauth: oauth::OAuthService::new(),
+            sso_handoff: SsoHandoffStore::new(),
         }
     }
 }

@@ -67,7 +67,10 @@ export function SettingsPage() {
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [ssoLoading, setSsoLoading] = useState(false);
   const [showSelectionModal, setShowSelectionModal] = useState(false);
-  const [ssoToken, setSsoToken] = useState<string | null>(null);
+  // Opaque one-shot handoff ID issued by the backend after OAuth callback.
+  // The OAuth access token never reaches the browser — it stays in the
+  // backend handoff store until /auth/sso-complete consumes the same ID.
+  const [ssoHandoffId, setSsoHandoffId] = useState<string | null>(null);
   const [ssoAccounts, setSsoAccounts] = useState<CloudflareAccount[]>([]);
   const [ssoZones, setSsoZones] = useState<CloudflareZone[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>('');
@@ -87,14 +90,18 @@ export function SettingsPage() {
     defaultValues: settings?.data?.data,
   });
 
-  // Handle SSO callback URL params
+  // Handle SSO callback URL params.
+  //
+  // Previously the OAuth access token was passed in the URL query
+  // (sso_token, sso_accounts, sso_zones). That leaked it to access
+  // logs, browser history, and referrer headers. Now the backend
+  // stashes the token in a server-side handoff store keyed by a
+  // one-shot UUID, and only the UUID rides back to us as `sso_handoff`.
   useEffect(() => {
     const error = searchParams.get('error');
     const ssoSuccess = searchParams.get('sso_success');
     const zone = searchParams.get('zone');
-    const token = searchParams.get('sso_token');
-    const accountsJson = searchParams.get('sso_accounts');
-    const zonesJson = searchParams.get('sso_zones');
+    const handoff = searchParams.get('sso_handoff');
 
     // Clear URL params after processing
     const clearParams = () => {
@@ -108,22 +115,32 @@ export function SettingsPage() {
       toast.success(`Connected to ${decodeURIComponent(zone)}`);
       refetchConnection();
       clearParams();
-    } else if (token && accountsJson && zonesJson) {
-      // Need to select account/zone
-      try {
-        const accounts = JSON.parse(decodeURIComponent(accountsJson));
-        const zones = JSON.parse(decodeURIComponent(zonesJson));
-        setSsoToken(decodeURIComponent(token));
-        setSsoAccounts(accounts);
-        setSsoZones(zones);
-        setShowSelectionModal(true);
-        if (accounts.length === 1) setSelectedAccount(accounts[0].id);
-        if (zones.length === 1) setSelectedZone(zones[0].id);
-        clearParams();
-      } catch (e) {
-        toast.error('Failed to parse SSO response');
-        clearParams();
-      }
+    } else if (handoff) {
+      // Multi-account/zone case: ask the backend for the resources to
+      // render a picker. The access token stays server-side.
+      (async () => {
+        try {
+          const response = await cloudflareApi.getSsoHandoff(handoff);
+          const data = response.data;
+          if (!data?.success || !data?.resources) {
+            toast.error(data?.error || 'SSO handoff expired. Please try again.');
+            clearParams();
+            return;
+          }
+          const accounts = data.resources.accounts || [];
+          const zones = data.resources.zones || [];
+          setSsoHandoffId(handoff);
+          setSsoAccounts(accounts);
+          setSsoZones(zones);
+          setShowSelectionModal(true);
+          if (accounts.length === 1) setSelectedAccount(accounts[0].id);
+          if (zones.length === 1) setSelectedZone(zones[0].id);
+          clearParams();
+        } catch {
+          toast.error('Failed to load SSO handoff');
+          clearParams();
+        }
+      })();
     }
   }, [searchParams, setSearchParams, refetchConnection]);
 
@@ -202,20 +219,22 @@ export function SettingsPage() {
     }
   };
 
-  // Complete SSO with selected account/zone
+  // Complete SSO with selected account/zone.
+  // We pass only the handoff ID; the backend consumes it (one-shot) to
+  // recover the access token from its in-memory store and finish the flow.
   const completeSsoConnection = async () => {
-    if (!ssoToken || !selectedAccount || !selectedZone) {
+    if (!ssoHandoffId || !selectedAccount || !selectedZone) {
       toast.error('Please select an account and zone');
       return;
     }
 
     setSsoLoading(true);
     try {
-      const response = await cloudflareApi.ssoComplete(ssoToken, selectedAccount, selectedZone);
+      const response = await cloudflareApi.ssoComplete(ssoHandoffId, selectedAccount, selectedZone);
       if (response.data?.success && response.data?.connected) {
         toast.success(response.data.message || 'Connected successfully');
         setShowSelectionModal(false);
-        setSsoToken(null);
+        setSsoHandoffId(null);
         refetchConnection();
         queryClient.invalidateQueries({ queryKey: ['plugin-settings'] });
       } else {
